@@ -33,7 +33,7 @@ void MatrixMath::Print(mtx_type* A, int m, int n, String label)
 
 void MatrixMath::Copy(mtx_type* A, int n, int m, mtx_type* B)
 {
-	int i, j, k;
+	int i, j;
 	for (i = 0; i < m; i++)
 		for(j = 0; j < n; j++)
 		{

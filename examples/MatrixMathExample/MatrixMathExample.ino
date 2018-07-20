@@ -9,7 +9,7 @@ mtx_type C[N][N];
 mtx_type v[N];      // This is a row vector
 mtx_type w[N];
 
-mtx_type max = 10;  // maximum random matrix entry range
+mtx_type maxVal = 10;  // maxValimum random matrix entry range
 
 void setup()
 {
@@ -21,7 +21,7 @@ void setup()
 		v[i] = i + 1;                  // vector of sequential numbers
 		for (int j = 0; j < N; j++)
 		{
-			A[i][j] = random(max) - max / 2.0f; // A is random
+			A[i][j] = random(maxVal) - maxVal / 2.0f; // A is random
 			if (i == j)
 			{
 				B[i][j] = 1.0f;                  // B is identity
