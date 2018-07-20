@@ -1,8 +1,13 @@
 # MatrixMath
-A GitHub repo for the MatrixMath Arduino library - http://playground.arduino.cc/Code/MatrixMath
+http://playground.arduino.cc/Code/MatrixMath
 
-This Arduino library for Matrix Mathematical operations gives you all the basics in a lean package, up to in-place matrix inversion.
-You will need to pay careful attention to matching matrix dimensions - this isn't Matlab!
+A minimal linear algebra library for Arduino. This gives you all the basics in a lean package, up to in-place matrix inversion.
+Matrices are represented as simple 2D arrays, so you need to check dimension agreement manually.
+
+A far more capable, testable, and friendly linear algebra library for Arduino is https://github.com/tomstewart89/BasicLinearAlgebra
+
+And a related library for vector geometry manipulation is https://github.com/tomstewart89/Geometry
+
 
 ### History
 
@@ -14,4 +19,4 @@ Unknown original author, Arduino form user RobH45345, posted code to Arduino pla
 
 ### License
 
-The original author didn't specify a License, but I'm going out on a limb and guessing that he implied GPL2. 
+GPL2. 
