@@ -124,7 +124,7 @@ int MatrixMath::Invert(mtx_type* A, int n)
 {
 	// A = input matrix AND result matrix
 	// n = number of rows = number of columns in A (n x n)
-	int pivrow;		// keeps track of current pivot row
+	int pivrow = 0;		// keeps track of current pivot row
 	int k, i, j;		// k: overall index along diagonal; i: row index; j: col index
 	int pivrows[n]; // keeps track of rows swaps to undo at end
 	mtx_type tmp;		// used for finding max value and making column swaps
