@@ -304,6 +304,279 @@ void kalmanUpdate(KalmanFilter* kf, float measurement[2]) {
         Matrix.Multiply((float*)KH, (float*)kf->covariance, 4, 4, 4, (float*)kf->covariance);
     }
 }
+
+## Memory Considerations
+
+### Arduino Memory Management
+```cpp
+// Use static allocation for better memory management
+static float workingMatrix[3][3];
+static float resultMatrix[3][3];
+
+// Avoid dynamic allocation in loop()
+void loop() {
+    // Reuse pre-allocated matrices
+    calculateRotationMatrix(roll, pitch, yaw, workingMatrix);
+    Matrix.Multiply((float*)baseMatrix, (float*)workingMatrix, 3, 3, 3, (float*)resultMatrix);
+}
+```
+
+### In-Place Operations
+```cpp
+// Use in-place operations to save memory
+float matrix[3][3] = {{1,2,3}, {4,5,6}, {7,8,9}};
+
+// Scale in-place
+Matrix.Scale((float*)matrix, 3, 3, 2.0);
+
+// Invert in-place (if possible)
+if (Matrix.Invert((float*)matrix, 3) == 0) {
+    // Matrix successfully inverted in-place
+}
+```
+
+### Memory Pool for Large Operations
+```cpp
+// Pre-allocate memory pool for complex operations
+class MatrixPool {
+private:
+    static float pool[10][4][4];  // Pool of 10 4x4 matrices
+    static bool used[10];
+
+public:
+    static float* allocate() {
+        for (int i = 0; i < 10; i++) {
+            if (!used[i]) {
+                used[i] = true;
+                return (float*)pool[i];
+            }
+        }
+        return nullptr; // Pool exhausted
+    }
+
+    static void deallocate(float* matrix) {
+        for (int i = 0; i < 10; i++) {
+            if ((float*)pool[i] == matrix) {
+                used[i] = false;
+                break;
+            }
+        }
+    }
+};
+```
+
+## Error Handling
+
+### Matrix Dimension Checking
+```cpp
+bool isValidMatrixOperation(int m1, int n1, int m2, int n2, char operation) {
+    switch(operation) {
+        case 'M': // Multiplication
+            return (n1 == m2);
+        case 'A': // Addition/Subtraction
+        case 'S':
+            return (m1 == m2 && n1 == n2);
+        default:
+            return false;
+    }
+}
+
+// Safe matrix multiplication with dimension checking
+bool safeMatrixMultiply(float* A, float* B, int m, int p, int n, float* C) {
+    if (!isValidMatrixOperation(m, p, p, n, 'M')) {
+        Serial.println("Error: Invalid matrix dimensions for multiplication");
+        return false;
+    }
+
+    Matrix.Multiply(A, B, m, p, n, C);
+    return true;
+}
+```
+
+### Numerical Stability
+```cpp
+// Check for numerical stability in matrix operations
+bool isMatrixStable(float* matrix, int n) {
+    float determinant = calculateDeterminant(matrix, n);
+    return (abs(determinant) > 1e-10); // Avoid near-singular matrices
+}
+
+// Calculate determinant for 2x2 matrix
+float determinant2x2(float matrix[2][2]) {
+    return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0];
+}
+
+// Calculate determinant for 3x3 matrix
+float determinant3x3(float matrix[3][3]) {
+    return matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1])
+         - matrix[0][1] * (matrix[1][0] * matrix[2][2] - matrix[1][2] * matrix[2][0])
+         + matrix[0][2] * (matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0]);
+}
+```
+
+## Performance Optimization
+
+### Loop Unrolling for Small Matrices
+```cpp
+// Optimized 3x3 matrix multiplication
+void multiply3x3Optimized(float A[3][3], float B[3][3], float C[3][3]) {
+    C[0][0] = A[0][0]*B[0][0] + A[0][1]*B[1][0] + A[0][2]*B[2][0];
+    C[0][1] = A[0][0]*B[0][1] + A[0][1]*B[1][1] + A[0][2]*B[2][1];
+    C[0][2] = A[0][0]*B[0][2] + A[0][1]*B[1][2] + A[0][2]*B[2][2];
+
+    C[1][0] = A[1][0]*B[0][0] + A[1][1]*B[1][0] + A[1][2]*B[2][0];
+    C[1][1] = A[1][0]*B[0][1] + A[1][1]*B[1][1] + A[1][2]*B[2][1];
+    C[1][2] = A[1][0]*B[0][2] + A[1][1]*B[1][2] + A[1][2]*B[2][2];
+
+    C[2][0] = A[2][0]*B[0][0] + A[2][1]*B[1][0] + A[2][2]*B[2][0];
+    C[2][1] = A[2][0]*B[0][1] + A[2][1]*B[1][1] + A[2][2]*B[2][1];
+    C[2][2] = A[2][0]*B[0][2] + A[2][1]*B[1][2] + A[2][2]*B[2][2];
+}
+```
+
+### Cache-Friendly Operations
+```cpp
+// Process matrices in blocks for better cache performance
+void blockMatrixMultiply(float* A, float* B, float* C, int n, int blockSize) {
+    for (int i = 0; i < n; i += blockSize) {
+        for (int j = 0; j < n; j += blockSize) {
+            for (int k = 0; k < n; k += blockSize) {
+                // Multiply block
+                for (int ii = i; ii < min(i + blockSize, n); ii++) {
+                    for (int jj = j; jj < min(j + blockSize, n); jj++) {
+                        for (int kk = k; kk < min(k + blockSize, n); kk++) {
+                            C[ii*n + jj] += A[ii*n + kk] * B[kk*n + jj];
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+## Integration Examples
+
+### With IMU Sensors
+```cpp
+#include <Wire.h>
+#include <MatrixMath.h>
+
+// IMU data fusion using matrix operations
+struct IMUData {
+    float accel[3];
+    float gyro[3];
+    float mag[3];
+    float quaternion[4];
+};
+
+void updateQuaternion(IMUData* imu, float dt) {
+    // Convert gyro to quaternion rate
+    float gyroQuat[4] = {0, imu->gyro[0], imu->gyro[1], imu->gyro[2]};
+
+    // Quaternion multiplication matrix
+    float omegaMatrix[4][4] = {
+        {0, -imu->gyro[0], -imu->gyro[1], -imu->gyro[2]},
+        {imu->gyro[0], 0, imu->gyro[2], -imu->gyro[1]},
+        {imu->gyro[1], -imu->gyro[2], 0, imu->gyro[0]},
+        {imu->gyro[2], imu->gyro[1], -imu->gyro[0], 0}
+    };
+
+    // Scale by dt/2
+    Matrix.Scale((float*)omegaMatrix, 4, 4, dt/2.0);
+
+    // Update quaternion: q = q + (Ω * q) * dt/2
+    float quatDot[4];
+    Matrix.Multiply((float*)omegaMatrix, imu->quaternion, 4, 4, 1, quatDot);
+    Matrix.Add(imu->quaternion, quatDot, 4, 1, imu->quaternion);
+
+    // Normalize quaternion
+    float norm = sqrt(imu->quaternion[0]*imu->quaternion[0] +
+                     imu->quaternion[1]*imu->quaternion[1] +
+                     imu->quaternion[2]*imu->quaternion[2] +
+                     imu->quaternion[3]*imu->quaternion[3]);
+    Matrix.Scale(imu->quaternion, 4, 1, 1.0/norm);
+}
+```
+
+### With GPS Navigation
+```cpp
+// GPS coordinate transformations
+void convertWGS84ToUTM(float lat, float lon, float* utmX, float* utmY) {
+    // Simplified UTM conversion using matrix operations
+    float latRad = lat * PI / 180.0;
+    float lonRad = lon * PI / 180.0;
+
+    // UTM transformation matrix (simplified)
+    float utmMatrix[2][2] = {
+        {cos(latRad), -sin(latRad)},
+        {sin(latRad), cos(latRad)}
+    };
+
+    float coords[2] = {lonRad, latRad};
+    float utm[2];
+
+    Matrix.Multiply((float*)utmMatrix, coords, 2, 2, 1, utm);
+
+    *utmX = utm[0] * 6378137.0; // Earth radius scaling
+    *utmY = utm[1] * 6378137.0;
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+1. **Matrix dimension mismatch**: Always verify dimensions before operations
+2. **Memory overflow**: Use static allocation and monitor stack usage
+3. **Numerical instability**: Check for singular matrices before inversion
+4. **Precision loss**: Consider using double precision for critical calculations
+
+### Debug Helpers
+```cpp
+void printMatrix(float* matrix, int rows, int cols, String name) {
+    Serial.println(name + ":");
+    for(int i = 0; i < rows; i++) {
+        for(int j = 0; j < cols; j++) {
+            Serial.print(matrix[i*cols + j], 6);
+            Serial.print("\t");
+        }
+        Serial.println();
+    }
+    Serial.println();
+}
+
+void validateMatrixOperation(float* result, int rows, int cols, String operation) {
+    bool hasNaN = false;
+    bool hasInf = false;
+
+    for(int i = 0; i < rows * cols; i++) {
+        if(isnan(result[i])) hasNaN = true;
+        if(isinf(result[i])) hasInf = true;
+    }
+
+    if(hasNaN) Serial.println("Warning: " + operation + " produced NaN values");
+    if(hasInf) Serial.println("Warning: " + operation + " produced infinite values");
+}
+```
+
+## Performance Tips
+
+1. **Pre-allocate matrices** outside of loop functions
+2. **Use in-place operations** when possible to save memory
+3. **Avoid repeated calculations** by storing intermediate results
+4. **Use appropriate data types** (float vs double based on precision needs)
+5. **Consider fixed-point arithmetic** for very memory-constrained applications
+6. **Unroll loops** for small, fixed-size matrices
+7. **Use block algorithms** for large matrices
+
+## License
+This library is typically released under GPL or MIT license. Check the original repository for specific licensing terms.
+
+## References
+- Original Arduino Playground: http://playground.arduino.cc/Code/MatrixMath
+- Linear Algebra for Engineers and Scientists
+- Numerical Methods for Embedded Systems
+- Arduino Memory Management Best Practices
 ```
 
 
